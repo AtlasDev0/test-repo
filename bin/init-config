@@ -1,0 +1,225 @@
+#!/bin/bash
+# init-config - Generate clawdbot.json from env vars + existing config
+# Usage: ./bin/init-config [--dry-run]
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_SOURCE="/Users/agent0/.clawdbot/clawdbot.json"
+CONFIG_DEST="/Users/agent0/.clawdbot/clawdbot.json"
+ENV_FILE="${SCRIPT_DIR}/../.env"
+MEMORY_FILE="${SCRIPT_DIR}/../MEMORY.md"
+MEMORY_DIR="${SCRIPT_DIR}/../memory"
+
+DRY_RUN=false
+RESTART=true
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run)
+            DRY_RUN=true
+            RESTART=false
+            ;;
+    esac
+done
+
+# Function to load memory files for context
+load_memory() {
+    echo "📚 Loading memory..."
+
+    # Read long-term memory
+    if [[ -f "$MEMORY_FILE" ]]; then
+        echo "  • Loaded: MEMORY.md"
+        # Display key sections for awareness (commented out for brevity)
+        # cat "$MEMORY_FILE" | head -50
+    else
+        echo "  • Warning: MEMORY.md not found"
+    fi
+
+    # Read today's memory
+    local today_mem="${MEMORY_DIR}/$(date +%Y-%m-%d).md"
+    if [[ -f "$today_mem" ]]; then
+        echo "  • Loaded: $(basename "$today_mem")"
+    else
+        echo "  • No daily memory for today"
+    fi
+
+    echo ""
+}
+
+# Load memory for context
+load_memory
+
+# Load .env if exists
+if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
+# Verify source config exists
+if [[ ! -f "$CONFIG_SOURCE" ]]; then
+    TEMPLATE="${SCRIPT_DIR}/clawdbot.template.json"
+    if [[ -f "$TEMPLATE" ]]; then
+        echo "No config found at $CONFIG_SOURCE, using template..."
+        CONFIG_SOURCE="$TEMPLATE"
+    else
+        echo "Error: Config not found at $CONFIG_SOURCE and no template at $TEMPLATE"
+        exit 1
+    fi
+fi
+
+# Function to apply env var overrides
+apply_overrides() {
+    local json="$1"
+
+    # Telegram bot token
+    if [[ -n "$TELEGRAM_BOT_TOKEN" ]]; then
+        json=$(echo "$json" | jq --arg token "$TELEGRAM_BOT_TOKEN" '.channels.telegram.botToken = $token')
+    fi
+
+    # Telegram allowlist (comma-separated to array)
+    if [[ -n "$TELEGRAM_ALLOW_FROM" ]]; then
+        IFS=',' read -ra IDS <<< "$TELEGRAM_ALLOW_FROM"
+        json=$(echo "$json" | jq --argjson ids "$(printf '%s\n' "${IDS[@]}" | jq -R . | jq -s .)" '.channels.telegram.allowFrom = $ids')
+    fi
+
+    # Gateway auth token
+    if [[ -n "$GATEWAY_AUTH_TOKEN" ]]; then
+        json=$(echo "$json" | jq --arg token "$GATEWAY_AUTH_TOKEN" '.gateway.auth.token = $token')
+    fi
+
+    # Gateway mode
+    if [[ -n "$GATEWAY_MODE" ]]; then
+        json=$(echo "$json" | jq --arg mode "$GATEWAY_MODE" '.gateway.mode = $mode')
+    fi
+
+    # Default model
+    if [[ -n "$DEFAULT_MODEL" ]]; then
+        json=$(echo "$json" | jq --arg model "$DEFAULT_MODEL" '.agents.defaults.model.primary = $model')
+    fi
+
+    # Memory flush
+    if [[ "$MEMORY_FLUSH_ENABLED" == "true" ]]; then
+        json=$(echo "$json" | jq '.agents.defaults.compaction.memoryFlush.enabled = true')
+        if [[ -n "$MEMORY_FLUSH_THRESHOLD" ]]; then
+            json=$(echo "$json" | jq --arg threshold "$MEMORY_FLUSH_THRESHOLD" '.agents.defaults.compaction.memoryFlush.softThresholdTokens = ($threshold | tonumber)')
+        fi
+    fi
+
+    echo "$json"
+}
+
+# Function to update auth profiles
+update_auth() {
+    local auth_file="/Users/agent0/.clawdbot/agents/main/agent/auth-profiles.json"
+
+    if [[ ! -f "$auth_file" ]]; then
+        echo "Auth file not found: $auth_file"
+        return
+    fi
+
+    # MiniMax API key
+    if [[ -n "$MINIMAX_API_KEY" ]]; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] Would update minimax API key in $auth_file"
+        else
+            local updated=$(cat "$auth_file" | jq --arg key "$MINIMAX_API_KEY" '.profiles["minimax:default"].key = $key')
+            echo "$updated" > "$auth_file"
+            echo "Updated MiniMax API key in $auth_file"
+        fi
+    fi
+}
+
+# Function to update credentials
+update_credentials() {
+    local creds_dir="/Users/agent0/.clawdbot/credentials"
+    local agentmail_creds="${creds_dir}/agentmail.json"
+
+    mkdir -p "$creds_dir"
+
+    # AgentMail credentials
+    if [[ -n "$AGENTMAIL_API_KEY" ]]; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] Would update agentmail credentials"
+        else
+            local updated=$(cat <<EOF
+{
+  "service": "agentmail",
+  "email": "agent0@agentmail.to",
+  "api_key": "$AGENTMAIL_API_KEY",
+  "created": "2026-01-28",
+  "url": "https://agentmail.to"
+}
+EOF
+)
+            echo "$updated" > "$agentmail_creds"
+            echo "Updated AgentMail credentials"
+        fi
+    fi
+}
+
+# Function to check gateway health
+check_gateway() {
+    clawdbot status >/dev/null 2>&1
+}
+
+# Function to restart gateway with fallback
+restart_gateway() {
+    echo "Restarting clawdbot gateway..."
+    clawdbot gateway restart || true
+
+    # Wait for gateway to be ready
+    local max_attempts=10
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+        if check_gateway; then
+            echo "Gateway is ready"
+            return 0
+        fi
+        echo "Waiting for gateway... (attempt $attempt/$max_attempts)"
+        sleep 1
+        ((attempt++))
+    done
+
+    # Gateway failed to start, fallback to template
+    echo "Gateway failed to start, running fallback..."
+    sleep 5
+    echo "Re-running cb init from template..."
+    CONFIG_SOURCE="${SCRIPT_DIR}/clawdbot.template.json"
+    CONFIG_JSON=$(cat "$CONFIG_SOURCE")
+    CONFIG=$(apply_overrides "$CONFIG_JSON")
+    echo "$CONFIG" > "$CONFIG_DEST"
+    update_auth
+    clawdbot gateway restart || true
+
+    # Final health check
+    if check_gateway; then
+        echo "Gateway recovered via fallback"
+    else
+        echo "ERROR: Gateway failed to start even with fallback"
+        exit 1
+    fi
+}
+
+# Read and transform config
+CONFIG_JSON=$(cat "$CONFIG_SOURCE")
+CONFIG=$(apply_overrides "$CONFIG_JSON")
+
+# Output
+if [[ "$DRY_RUN" == "true" ]]; then
+    echo "$CONFIG" | jq .
+else
+    echo "$CONFIG" > "$CONFIG_DEST"
+    echo "Config written to $CONFIG_DEST"
+
+    # Update auth profiles
+    update_auth
+
+    # Update credentials
+    update_credentials
+
+    # Restart gateway if requested
+    if [[ "$RESTART" == "true" ]]; then
+        restart_gateway
+    fi
+fi
