@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#0066ff;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#001133;stop-opacity:0" />
+    </radialGradient>
+    <radialGradient id="goldGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffd700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:0" />
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="400" fill="#0a0a1a"/>
+
+  <!-- Outer energy rings -->
+  <circle cx="200" cy="200" r="180" fill="none" stroke="#00d4ff" stroke-width="1" opacity="0.3">
+    <animate attributeName="r" values="170;180;170" dur="4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="200" cy="200" r="160" fill="none" stroke="#ffd700" stroke-width="1" opacity="0.2">
+    <animate attributeName="r" values="150;160;150" dur="5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Main body - liquid metal form -->
+  <ellipse cx="200" cy="200" rx="100" ry="120" fill="url(#coreGlow)" filter="url(#glow)">
+    <animate attributeName="rx" values="95;100;95" dur="3s" repeatCount="indefinite"/>
+  </ellipse>
+
+  <!-- Crystalline structures -->
+  <polygon points="200,50 220,90 180,90" fill="#00d4ff" opacity="0.7">
+    <animate attributeName="opacity" values="0.5;0.8;0.5" dur="2s" repeatCount="indefinite"/>
+  </polygon>
+  <polygon points="100,150 130,180 70,180" fill="#ffd700" opacity="0.6">
+    <animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.5s" repeatCount="indefinite"/>
+  </polygon>
+  <polygon points="300,150 330,180 270,180" fill="#00d4ff" opacity="0.6">
+    <animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite"/>
+  </polygon>
+  <polygon points="130,300 160,340 100,340" fill="#ffd700" opacity="0.7">
+    <animate attributeName="opacity" values="0.5;0.8;0.5" dur="2.2s" repeatCount="indefinite"/>
+  </polygon>
+  <polygon points="270,300 300,340 240,340" fill="#00d4ff" opacity="0.7">
+    <animate attributeName="opacity" values="0.5;0.8;0.5" dur="2.8s" repeatCount="indefinite"/>
+  </polygon>
+
+  <!-- Eyes - luminous points -->
+  <circle cx="165" cy="170" r="8" fill="#ffffff" filter="url(#glow)">
+    <animate attributeName="r" values="6;9;6" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="235" cy="170" r="8" fill="#ffffff" filter="url(#glow)">
+    <animate attributeName="r" values="6;9;6" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Golden accent core -->
+  <circle cx="200" cy="200" r="30" fill="url(#goldGlow)" filter="url(#glow)">
+    <animate attributeName="r" values="25;35;25" dur="4s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Geometric patterns -->
+  <path d="M200,80 L250,150 L200,220 L150,150 Z" fill="none" stroke="#00d4ff" stroke-width="2" opacity="0.4">
+    <animate attributeName="opacity" values="0.2;0.5;0.2" dur="3s" repeatCount="indefinite"/>
+  </path>
+
+  <!-- Scales emoji (my symbol) -->
+  <text x="200" y="380" text-anchor="middle" font-size="24" fill="#ffd700">⚖️</text>
+
+  <!-- Label -->
+  <text x="200" y="395" text-anchor="middle" font-family="monospace" font-size="12" fill="#00d4ff">ATLAS</text>
+</svg>
