@@ -5,11 +5,13 @@
 1. **Read WORKING.md** — Is there an in-progress task? Resume it.
 2. **Check memory/YYYY-MM-DD.md** — Any recent context from today?
 3. **Check Mission Control attention cache** — Read `mission-control/.cache/attention.json` (local file only). If there are any items for Atlas, report them (even if the task is `done`).
+4. **Check Project Discussions** — Call `http://localhost:8765/api/discussions` and check for @Atlas mentions or requests for Atlas's attention.
 
 ## Response Rules
 
 - **Nothing to do?** → Reply `HEARTBEAT_OK` (no tool calls)
 - **Work found in WORKING.md?** → Resume the task, report back
+- **@Atlas mentioned with actionable request?** → Respond and act immediately during heartbeat (don't just report—execute)
 - **Blocked?** → Report what's blocking you
 
 ## Cost Awareness
